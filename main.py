@@ -4,6 +4,7 @@ import uvicorn
 import requests
 import json
 import urllib3
+from urllib3 import ProxyManager
 import geopy.distance
 
 app = FastAPI()
@@ -14,10 +15,12 @@ async def root(
     long: float = 0,
     limit: int = 10
     ):
+    
+    # http = ProxyManager("")
 
     page = urllib3.request(
         url="https://resource.data.one.gov.hk/td/carpark/basic_info_all.json",
-        method="GET"
+        method="GET",
     )
 
     d = page.data
@@ -33,19 +36,20 @@ async def root(
         coor = (lati,longi)
         your_coor = (my_lat,my_lon)
         entry["distance"] = geopy.distance.geodesic(coor,your_coor).km
+        
+    jsn["car_park"] = sorted(jsn["car_park"], key=lambda k: k.get('distance'), reverse=False)
     
     if limit == 0:
         return jsn
     else:
         jsn["car_park"] = jsn["car_park"][:limit]
-        jsn["car_park"] = sorted(jsn["car_park"], key=lambda k: k.get('distance', 0), reverse=False)
         return jsn
 
 
 if __name__ == "__main__":
     uvicorn.run(
         host="0.0.0.0",
-        port=80,
+        port=8081,
         app="main:app",
         reload=True
           )

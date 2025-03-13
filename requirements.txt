@@ -1,5 +1,5 @@
 requests
 uvicorn
 fastapi
-urllib3
+urllib3>=2
 geopy
