@@ -7,7 +7,9 @@ import urllib3
 from urllib3 import ProxyManager
 import geopy.distance
 
-app = FastAPI()
+app = FastAPI(
+    docs_url="/moodle",
+)
 
 @app.get("/")
 async def root(
@@ -43,6 +45,48 @@ async def root(
         return jsn
     else:
         jsn["car_park"] = jsn["car_park"][:limit]
+        return jsn
+
+@app.get("/v1")
+async def root(
+    lat: float = 0,
+    long: float = 0,
+    limit: int = 10,
+    lang: str = ""
+    ):
+    
+    # http = ProxyManager("")
+
+
+    page = urllib3.request(
+        url=f"https://api.data.gov.hk/v1/carpark-info-vacancy?lang={lang}",
+        method="GET",
+    )
+
+    d = page.data
+    data = d.decode("utf-8-sig").encode("utf-8")
+    jsn = json.loads(data)
+    my_lat = lat
+    my_lon =  long
+    my_lang = lang
+    jsn["coor"] = [my_lat,my_lon]
+    jsn["lang"] = my_lang
+
+    for entry in jsn["results"]:
+        lati = entry["latitude"]
+        longi = entry["longitude"]
+        coor = (lati,longi)
+        your_coor = (my_lat,my_lon)
+
+        entry["distance"] = geopy.distance.geodesic(coor,your_coor).km
+
+        
+    jsn["results"] = sorted(jsn["results"], key=lambda k: k.get('distance'), reverse=False)
+    
+    if limit == 0:
+        return jsn
+    else:
+        jsn["results"] = jsn["results"][:limit]
         return jsn
 
 
