@@ -7,7 +7,7 @@ import urllib3
 from urllib3 import ProxyManager
 import geopy.distance
 from pyproj import Transformer
-import os
+from pydantic import BaseModel
 
 app = FastAPI(
     docs_url="/moodle",
@@ -94,10 +94,11 @@ async def root(
     
 @app.get(
         "/search",
-        description="中英文地址皆可"
+        description="中英文地址皆可",
         )
 async def search(
-    address: str = "調景嶺IVE"
+    address: str = "調景嶺IVE",
+    kmDistanceOfCarparkFromAddress: float = 1
     ):
     
     carparks = requests.get(
@@ -139,17 +140,18 @@ async def search(
                   carpark['longitude'])
                   ).km
             
-            if (carpark["distance_from_input_address"] <= 0.5):
+            if (carpark["distance_from_input_address"] <= kmDistanceOfCarparkFromAddress):
                 carpark_nearby.append(carpark)
 
     carpark_nearby_and_input_address = {}
     carpark_nearby_and_input_address["search_address"] = address
     carpark_nearby_and_input_address["return_result"] = geoInfoMap
-    carpark_nearby_and_input_address["carparks_nearby"] =  {(entry["park_id"]): entry for entry in carpark_nearby}
+    unique = {(item["park_id"]):item for item in
+           sorted(carpark_nearby, key=lambda x: x['distance_from_input_address'])}
 
+    carpark_nearby_and_input_address["carparks_nearby"] =  sorted(unique.values(), key=lambda x: (x['park_id']))
+    carpark_nearby_and_input_address["carparks_nearby"] =  sorted(carpark_nearby_and_input_address["carparks_nearby"], key=lambda x: (x['distance_from_input_address']))
     return carpark_nearby_and_input_address
-
-
 
 if __name__ == "__main__":
     uvicorn.run(
