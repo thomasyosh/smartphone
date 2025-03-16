@@ -93,7 +93,7 @@ async def root(
         return jsn
     
 @app.get(
-        "/search",
+        "/v2",
         description="中英文地址皆可",
         )
 async def search(
