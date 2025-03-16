@@ -98,6 +98,7 @@ async def root(
         )
 async def search(
     address: str = "調景嶺IVE",
+    numberOfAddressQueryResult: int = 5,
     kmDistanceOfCarparkFromAddress: float = 1
     ):
     
@@ -113,7 +114,7 @@ async def search(
     geoInfoMap = requests.get(
         "https://geodata.gov.hk/gs/api/v1.0.0/locationSearch",
         params=params
-        ).json()
+        ).json()[:numberOfAddressQueryResult]
 
     carpark_nearby = []
 
