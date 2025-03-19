@@ -8,10 +8,53 @@ from urllib3 import ProxyManager
 import geopy.distance
 from pyproj import Transformer
 from pydantic import BaseModel
+from sqlalchemy import Column, Integer, String, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from fastapi import FastAPI, HTTPException, Depends
+from sqlalchemy.orm import Session
 
 app = FastAPI(
     docs_url="/moodle",
 )
+
+DATABASE_URL = "sqlite:///./users.db"
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+
+Base = declarative_base()
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+class UserCreate(BaseModel):
+    name: str
+    email: str
+    age: int
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    age: int
+
+    class Config:
+        orm_mode = True
+
+# User model for SQLAlchemy
+class User(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    age = Column(Integer, nullable=False)
+
+# Create the database table
+Base.metadata.create_all(bind=engine)
 
 @app.get("/main_search/")
 async def main_search(
@@ -50,6 +93,21 @@ async def main_search(
     else:
         carparks_list["car_park"] = carparks_list["car_park"][:limit]
         return carparks_list
+
+@app.post("/users/", response_model=UserResponse)
+def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    new_user = User(name=user.name, email=user.email, age=user.age)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.get("/users/", response_model=list[UserResponse])
+def get_users(db: Session = Depends(get_db)):
+    return db.query(User).all()
 
 @app.get("/v1")
 async def root(
