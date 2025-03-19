@@ -154,6 +154,71 @@ async def search(
     carpark_nearby_and_input_address["carparks_nearby"] =  sorted(carpark_nearby_and_input_address["carparks_nearby"], key=lambda x: (x['distance_from_input_address']))
     return carpark_nearby_and_input_address
 
+@app.get(
+        "/v3",
+        description="中英文地址皆可",
+        )
+async def search(
+    address: str = "調景嶺IVE",
+    numberOfAddressQueryResult: int = 5,
+    kmDistanceOfCarparkFromAddress: float = 1,
+    lang: str = ""
+    ):
+    
+    carparks = requests.get(
+        url=f"https://api.data.gov.hk/v1/carpark-info-vacancy?lang={lang}",
+    )
+
+    carparks_data = carparks.content
+    carparks_data_in_utf8 = carparks_data.decode("utf-8-sig")
+    carparks_list = json.loads(carparks_data_in_utf8)
+    
+    params = {"q":address}
+    geoInfoMap = requests.get(
+        "https://geodata.gov.hk/gs/api/v1.0.0/locationSearch",
+        params=params
+        ).json()[:numberOfAddressQueryResult]
+
+    carpark_nearby = []
+
+    for entry in geoInfoMap:
+        hk80_coor = [entry["x"],entry["y"]]
+        geodetic_params = {
+            "inSys":"hkgrid",
+            "outSys":"wgsgeog",
+            "e":entry["x"],
+            "n":entry["y"]
+            }
+        hk80tolatlong = requests.get(
+            "https://www.geodetic.gov.hk/transform/v2/",
+            params=geodetic_params
+        ).json()
+
+        
+        entry["lat_long"] = [hk80tolatlong["wgsLat"],hk80tolatlong["wgsLong"]]
+        for carpark in carparks_list["results"]:
+            carpark["distance_from_input_address"] = geopy.distance.geodesic(
+                (entry["lat_long"][0],
+                 entry["lat_long"][1]),
+                 (carpark['latitude'],
+                  carpark['longitude'])
+                  ).km
+            
+            if (carpark["distance_from_input_address"] <= kmDistanceOfCarparkFromAddress):
+                carpark_nearby.append(carpark)
+
+    carpark_nearby_and_input_address = {}
+    carpark_nearby_and_input_address["search_address"] = address
+    carpark_nearby_and_input_address["return_result"] = geoInfoMap
+    unique = {(item["park_Id"]):item for item in
+           sorted(carpark_nearby, key=lambda x: x['distance_from_input_address'])}
+
+    carpark_nearby_and_input_address["carparks_nearby"] =  sorted(unique.values(), key=lambda x: (x['park_Id']))
+    carpark_nearby_and_input_address["carparks_nearby"] =  sorted(carpark_nearby_and_input_address["carparks_nearby"], key=lambda x: (x['distance_from_input_address']))
+    return carpark_nearby_and_input_address
+
+
+
 if __name__ == "__main__":
     uvicorn.run(
         host="0.0.0.0",
